@@ -73,6 +73,28 @@ async function init() {
     await installGitHooksDeps(cmd)
   }
 
+  const pkg = require(path.join(root, 'package.json'))
+  if (!pkg.scripts) pkg.scripts = {}
+  if (promptsResult.lint) {
+    pkg.scripts.lint = 'eslint --fix .'
+    await installLintDeps(cmd)
+  }
+  if (promptsResult.gitHooks) {
+    pkg.scripts.test = 'echo "Error: no test specified"'
+    pkg['lint-staged'] = {
+      '*.js': ['npm run lint', 'prettier --write', 'git add'],
+      '*.ts?(x)': [
+        'npm run lint',
+        'prettier --parser=typescript --write',
+        'git add',
+      ],
+    }
+  }
+  fs.writeFileSync(
+    path.join(root, 'package.json'),
+    JSON.stringify(pkg, null, 2)
+  )
+
   if (promptsResult.lint) {
     console.log('\nNow run:\n')
     console.log(green('  npx eslint --init\n'))
@@ -82,16 +104,6 @@ async function init() {
 
 async function installLintDeps(cmd) {
   try {
-    const pkg = require(path.join(root, 'package.json'))
-
-    if (!pkg.scripts) pkg.scripts = {}
-
-    pkg.scripts.lint = 'eslint --fix .'
-    fs.writeFileSync(
-      path.join(root, 'package.json'),
-      JSON.stringify(pkg, null, 2)
-    )
-
     await install(cmd[0], [cmd[1], 'eslint', '-D'])
     await install(cmd[0], [cmd[1], 'prettier', '-D'])
 
@@ -109,23 +121,6 @@ async function installLintDeps(cmd) {
 
 async function installGitHooksDeps(cmd) {
   try {
-    const pkg = require(path.join(root, 'package.json'))
-
-    if (!pkg.scripts) pkg.scripts = {}
-    pkg.scripts.test = 'echo "Error: no test specified"'
-    pkg['lint-staged'] = {
-      '*.js': ['npm run lint', 'prettier --write', 'git add'],
-      '*.ts?(x)': [
-        'npm run lint',
-        'prettier --parser=typescript --write',
-        'git add',
-      ],
-    }
-    fs.writeFileSync(
-      path.join(root, 'package.json'),
-      JSON.stringify(pkg, null, 2)
-    )
-
     await install(cmd[0] === 'pnpm' ? 'pnpx' : 'npx', ['husky-init', '-D'])
     await install(cmd[0], ['install'])
 
@@ -149,7 +144,7 @@ async function installGitHooksDeps(cmd) {
       '.husky/commit-msg',
       'npx --no-install commitlint --edit',
     ])
-    await execa('npx', ['husky', 'add', '.husky/pre-push', 'npm test'])
+    await execa('npx', ['husky', 'add', '.husky/pre-push', 'npm run test'])
   } catch (error) {
     console.error(error)
     return
