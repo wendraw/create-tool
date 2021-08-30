@@ -159,7 +159,7 @@ async function installGitHooksDeps(cmd) {
       '.husky/commit-msg',
       'npx --no-install commitlint --edit',
     ])
-    await execa('npx', ['husky', 'add', '.husky/pre-push', 'npx test'])
+    await execa('npx', ['husky', 'add', '.husky/pre-push', 'npm test'])
 
     console.log(
       green('\n"husky" and "commitlint" packages have been installed\n')
