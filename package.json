@@ -1,0 +1,58 @@
+{
+  "name": "create-tool",
+  "version": "0.0.1",
+  "description": "This is a front-end tool chain",
+  "main": "index.js",
+  "bin": {
+    "create-tool": "./index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\"",
+    "lint": "eslint --fix .",
+    "prepare": "husky install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wendraw/tool-kit.git"
+  },
+  "keywords": [
+    "tool",
+    "git hooks",
+    "eslint"
+  ],
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "author": "wendraw",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/wendraw/tool-kit/issues"
+  },
+  "homepage": "https://github.com/wendraw/tool-kit#readme",
+  "lint-staged": {
+    "*.js": [
+      "npm run lint",
+      "prettier --write",
+      "git add"
+    ],
+    "*.ts?(x)": [
+      "npm run lint",
+      "prettier --parser=typescript --write",
+      "git add"
+    ]
+  },
+  "dependencies": {
+    "execa": "^5.1.1",
+    "kolorist": "^1.5.0",
+    "minimist": "^1.2.5",
+    "prompts": "^2.4.1"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^13.1.0",
+    "@commitlint/config-conventional": "^13.1.0",
+    "eslint": "^7.32.0",
+    "husky": "^7.0.0",
+    "lint-staged": "^11.1.2",
+    "prettier": "^2.3.2"
+  }
+}
