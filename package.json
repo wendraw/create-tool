@@ -1,6 +1,6 @@
 {
   "name": "create-tool",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "This is a front-end tool chain",
   "main": "index.js",
   "bin": {
