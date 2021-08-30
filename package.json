@@ -11,6 +11,10 @@
     "lint": "eslint --fix .",
     "prepare": "husky install"
   },
+  "files": [
+    "index.js",
+    "template-*"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/wendraw/tool-kit.git"
