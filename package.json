@@ -1,6 +1,6 @@
 {
   "name": "create-tool",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "This is a front-end tool chain",
   "main": "index.js",
   "bin": {
@@ -35,13 +35,13 @@
   "homepage": "https://github.com/wendraw/tool-kit#readme",
   "lint-staged": {
     "*.js": [
-      "npm run lint",
       "prettier --write",
+      "npm run lint",
       "git add"
     ],
     "*.ts?(x)": [
-      "npm run lint",
       "prettier --parser=typescript --write",
+      "npm run lint",
       "git add"
     ]
   },

@@ -77,15 +77,14 @@ async function init() {
   if (!pkg.scripts) pkg.scripts = {}
   if (promptsResult.lint) {
     pkg.scripts.lint = 'eslint --fix .'
-    await installLintDeps(cmd)
   }
   if (promptsResult.gitHooks) {
     pkg.scripts.test = 'echo "Error: no test specified"'
     pkg['lint-staged'] = {
-      '*.js': ['npm run lint', 'prettier --write', 'git add'],
+      '*.js': ['prettier --write', 'npm run lint', 'git add'],
       '*.ts?(x)': [
-        'npm run lint',
         'prettier --parser=typescript --write',
+        'npm run lint',
         'git add',
       ],
     }
@@ -94,27 +93,71 @@ async function init() {
     path.join(root, 'package.json'),
     JSON.stringify(pkg, null, 2)
   )
-
-  if (promptsResult.lint) {
-    console.log('\nNow run:\n')
-    console.log(green('  npx eslint --init\n'))
-    console.log('to configure a ESLint\n')
-  }
 }
 
 async function installLintDeps(cmd) {
   try {
-    await install(cmd[0], [cmd[1], 'eslint', '-D'])
-    await install(cmd[0], [cmd[1], 'prettier', '-D'])
+    await install(cmd[0], [
+      cmd[1],
+      'eslint',
+      'prettier',
+      'eslint-plugin-prettier',
+      'eslint-config-prettier',
+      '-D',
+    ])
 
+    // copy templated files
     const templateDir = path.join(__dirname, 'template-lint')
-
     const files = fs.readdirSync(templateDir)
     for (const file of files.filter((f) => f !== 'package.json')) {
       copy(path.join(templateDir, file), path.join(root, file))
     }
   } catch (error) {
     console.error(error)
+    return
+  }
+
+  // reset eslintrc config file
+  try {
+    // Pass through the corresponding stdio stream to/from the parent process.
+    await execa('npx', ['eslint', '--init'], { stdio: 'inherit' })
+    let eslintrcPath = path.join(root, '.eslintrc.js')
+    let extname = 'js'
+    if (!fs.existsSync(eslintrcPath)) {
+      eslintrcPath = path.join(root, '.eslintrc.json')
+      extname = 'json'
+    }
+    const eslintrc = require(eslintrcPath)
+    eslintrc.extends.push('plugin:prettier/recommended')
+    eslintrc.rules = {
+      'import/prefer-default-export': 'off',
+      'no-restricted-syntax': 'off',
+      'no-use-before-define': ['error', { functions: false, classes: false }],
+      'import/no-unresolved': 'off',
+      'import/extensions': 'off',
+      'import/no-absolute-path': 'off',
+      'import/no-extraneous-dependencies': 'off',
+      'no-param-reassign': [
+        'error',
+        {
+          props: true,
+          ignorePropertyModificationsFor: ['state', 'config'],
+        },
+      ],
+      ...eslintrc.rules,
+    }
+    let eslintrcStr = JSON.stringify(eslintrc, null, 2)
+    if (extname === 'js') {
+      eslintrcStr = `module.exports = ${eslintrcStr}`
+    }
+    fs.writeFileSync(eslintrcPath, eslintrcStr)
+    await execa('npx', ['prettier', '--write', '.'])
+  } catch (error) {
+    console.log(
+      lightRed(
+        'Please select the eslint configuration file in JavaScript or JSON format'
+      )
+    )
     return
   }
 }
@@ -124,8 +167,12 @@ async function installGitHooksDeps(cmd) {
     await install(cmd[0] === 'pnpm' ? 'pnpx' : 'npx', ['husky-init', '-D'])
     await install(cmd[0], ['install'])
 
-    await install(cmd[0], [cmd[1], '@commitlint/config-conventional', '-D'])
-    await install(cmd[0], [cmd[1], '@commitlint/cli', '-D'])
+    await install(cmd[0], [
+      cmd[1],
+      '@commitlint/config-conventional',
+      '@commitlint/cli',
+      '-D',
+    ])
 
     fs.writeFileSync(
       path.join(root, 'commitlint.config.js'),
