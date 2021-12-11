@@ -36,9 +36,7 @@ async function init() {
   try {
     const cmd = await choiceCommand()
     if (!checkNpmRepository()) {
-      console.log('\nPlease create a new npm repository. use:\n')
-      console.log(green(`  ${cmd} git init\n`))
-      return
+      runCommand(cmd, ['init -y'])
     }
 
     const promptsResult = await prompts(
@@ -77,9 +75,7 @@ async function init() {
 
     if (promptsResult.gitLint) {
       if (!checkGitRepository()) {
-        console.log('\nPlease create a new npm repository. use:\n')
-        console.log(green('  git init\n'))
-        return
+        runCommand('git', ['init'])
       }
       await installGitLintDeps(cmd)
     }
