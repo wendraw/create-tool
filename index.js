@@ -37,6 +37,7 @@ async function init() {
     const cmd = await choiceCommand()
     if (!checkNpmRepository()) {
       runCommand(cmd, ['init -y'])
+      console.log('\n')
     }
 
     const promptsResult = await prompts(
@@ -121,7 +122,10 @@ async function installCodeLintDeps(cmd) {
     const templateDir = path.join(__dirname, 'template-code-lint')
     const files = fs.readdirSync(templateDir)
     for (const file of files.filter((f) => f !== 'package.json')) {
-      copy(path.join(templateDir, file), path.join(root, file))
+      copy(
+        path.join(templateDir, file),
+        path.join(root, file.replace(/^_/, '.'))
+      )
     }
 
     // reset eslintrc config file
@@ -169,6 +173,7 @@ async function installCodeLintDeps(cmd) {
     fs.writeFileSync(eslintrcPath, eslintrcStr)
     // format eslintrc file
     await runCommand(commandMap[cmd].exec, ['prettier', '--write', '.'])
+    await runCommand('rm', ['-rf', 'node_modules'])
     await runCommand(commandMap[cmd].installAll)
   } catch (error) {
     throw new Error(error)
@@ -178,6 +183,7 @@ async function installCodeLintDeps(cmd) {
 async function installGitLintDeps(cmd) {
   try {
     await runCommand(commandMap[cmd].templateDownload, ['husky-init -D'])
+    await runCommand('rm', ['-rf', 'node_modules'])
     await runCommand(commandMap[cmd].installAll)
 
     await runCommand(commandMap[cmd].add, [
@@ -195,7 +201,10 @@ async function installGitLintDeps(cmd) {
     const templateDir = path.join(__dirname, 'template-git-lint')
     const files = fs.readdirSync(templateDir)
     for (const file of files.filter((f) => f !== 'package.json')) {
-      copy(path.join(templateDir, file), path.join(root, file))
+      copy(
+        path.join(templateDir, file),
+        path.join(root, file.replace(/^_/, '.'))
+      )
     }
 
     await runCommand('rm', ['-rf', './.husky/pre-commit'])
@@ -205,24 +214,14 @@ async function installGitLintDeps(cmd) {
     await runCommand(commandMap[cmd].exec, [
       'commitizen init cz-conventional-changelog --save-dev --save-exact',
     ])
-    await execa(commandMap[cmd].exec, [
-      'husky',
-      'add',
-      '.husky/pre-commit',
-      `npx lint-staged`,
-    ])
-    await execa(commandMap[cmd].exec, [
+    await execa('npx', ['husky', 'add', '.husky/pre-commit', 'npx lint-staged'])
+    await execa('npx', [
       'husky',
       'add',
       '.husky/commit-msg',
-      `npx --no-install commitlint --edit`,
+      'npx --no-install commitlint --edit',
     ])
-    await execa(commandMap[cmd].exec, [
-      'husky',
-      'add',
-      '.husky/pre-push',
-      `${cmd} run test`,
-    ])
+    await execa('npx', ['husky', 'add', '.husky/pre-push', `${cmd} run test`])
     await execa('chmod', ['-R', '-X', './.husky'])
   } catch (error) {
     console.error(error)
