@@ -1,15 +1,17 @@
 {
   "name": "create-tool",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "This is a front-end tool chain",
   "main": "index.js",
   "bin": {
     "create-tool": "./index.js"
   },
   "scripts": {
+    "preinstall": "npx only-allow pnpm",
     "test": "echo \"Error: no test specified\"",
     "lint": "eslint --fix .",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "commit": "git-cz"
   },
   "files": [
     "index.js",
@@ -33,18 +35,6 @@
     "url": "https://github.com/wendraw/tool-kit/issues"
   },
   "homepage": "https://github.com/wendraw/tool-kit#readme",
-  "lint-staged": {
-    "*.js": [
-      "prettier --write",
-      "npm run lint",
-      "git add"
-    ],
-    "*.ts?(x)": [
-      "prettier --parser=typescript --write",
-      "npm run lint",
-      "git add"
-    ]
-  },
   "dependencies": {
     "execa": "^5.1.1",
     "kolorist": "^1.5.0",
@@ -52,11 +42,34 @@
     "prompts": "^2.4.1"
   },
   "devDependencies": {
-    "@commitlint/cli": "^13.1.0",
-    "@commitlint/config-conventional": "^13.1.0",
-    "eslint": "^7.32.0",
+    "@commitlint/cli": "^13.2.1",
+    "@commitlint/config-conventional": "^13.2.0",
+    "commitizen": "^4.2.4",
+    "cz-conventional-changelog": "^3.3.0",
+    "eslint": "^8.4.1",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-import": "^2.25.3",
+    "eslint-plugin-prettier": "^4.0.0",
     "husky": "^7.0.0",
     "lint-staged": "^11.1.2",
-    "prettier": "^2.3.2"
+    "prettier": "^2.5.1"
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "prettier --write",
+      "git add"
+    ],
+    "*.ts?(x)": [
+      "eslint --fix",
+      "prettier --parser=typescript --write",
+      "git add"
+    ]
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
   }
 }

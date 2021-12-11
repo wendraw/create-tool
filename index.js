@@ -11,38 +11,50 @@ const { green, lightRed, lightGreen } = require('kolorist')
 const execa = require('execa')
 
 const root = process.cwd()
-const promptsResult = {}
+const commandMap = {
+  npm: {
+    exec: 'npx',
+    templateDownload: 'npx',
+    installAll: 'npm install',
+    add: 'npm install',
+  },
+  pnpm: {
+    exec: 'pnpm',
+    templateDownload: 'pnpm dlx',
+    installAll: 'pnpm install',
+    add: 'pnpm add',
+  },
+  yarn: {
+    exec: 'yarn',
+    templateDownload: 'npx',
+    installAll: 'yarn install',
+    add: 'yarn add',
+  },
+}
 
 async function init() {
-  const npmState = await checkNpmRepository()
-  if (!npmState) {
-    console.log('\nPlease create a new npm repository. use:\n')
-    console.log(green('  npm init -y\n'))
-    return
-  }
-
-  const gitState = await checkGitRepository()
-  if (!gitState) {
-    console.log('\nPlease create a new npm repository. use:\n')
-    console.log(green('  git init\n'))
-    return
-  }
-
   try {
-    const result = await prompts(
+    const cmd = await choiceCommand()
+    if (!checkNpmRepository()) {
+      console.log('\nPlease create a new npm repository. use:\n')
+      console.log(green(`  ${cmd} git init\n`))
+      return
+    }
+
+    const promptsResult = await prompts(
       [
         {
           type: 'toggle',
-          name: 'lint',
-          message: 'Do you use lint?',
+          name: 'codeLint',
+          message: 'Do you want use code lint?',
           initial: true,
           active: 'yes',
           inactive: 'no',
         },
         {
           type: 'toggle',
-          name: 'gitHooks',
-          message: 'Do you use git hooks?',
+          name: 'gitLint',
+          message: 'Do you want use git lint?',
           initial: true,
           active: 'yes',
           inactive: 'no',
@@ -50,55 +62,58 @@ async function init() {
       ],
       {
         onCancel: () => {
-          throw new Error(lightRed('✖') + ' Operation cancelled')
+          throw new Error(`${lightRed('✖')} Operation cancelled`)
         },
       }
     )
-    Object.assign(promptsResult, result)
-  } catch (cancelled) {
-    console.log(cancelled.message)
+
+    if (promptsResult.codeLint || promptsResult.gitLint) {
+      console.log(green('\nInstalling dependencies...\n'))
+    }
+
+    if (promptsResult.codeLint) {
+      await installCodeLintDeps(cmd)
+    }
+
+    if (promptsResult.gitLint) {
+      if (!checkGitRepository()) {
+        console.log('\nPlease create a new npm repository. use:\n')
+        console.log(green('  git init\n'))
+        return
+      }
+      await installGitLintDeps(cmd)
+    }
+
+    // need setup scripts after install dependencies
+    const pkg = require(path.join(root, 'package.json'))
+
+    if (!pkg.scripts) pkg.scripts = {}
+
+    if (promptsResult.gitLint) {
+      pkg.scripts.commit = 'git-cz'
+      pkg.scripts.test = 'echo "Error: no test specified"'
+      pkg['lint-staged'] = {
+        '*.js': ['eslint --fix', 'prettier --write', 'git add'],
+        '*.ts?(x)': [
+          'eslint --fix',
+          'prettier --parser=typescript --write',
+          'git add',
+        ],
+      }
+    }
+    fs.writeFileSync(
+      path.join(root, 'package.json'),
+      JSON.stringify(pkg, null, 2)
+    )
+  } catch (error) {
+    console.log(error.message)
     return
   }
-
-  if (promptsResult.lint || promptsResult.gitHooks) {
-    console.log(lightGreen('\nInstalling dependencies...\n'))
-  }
-
-  const cmd = await getCmd()
-
-  if (promptsResult.lint) {
-    await installLintDeps(cmd)
-  }
-  if (promptsResult.gitHooks) {
-    await installGitHooksDeps(cmd)
-  }
-
-  const pkg = require(path.join(root, 'package.json'))
-  if (!pkg.scripts) pkg.scripts = {}
-  if (promptsResult.lint) {
-    pkg.scripts.lint = 'eslint --fix .'
-  }
-  if (promptsResult.gitHooks) {
-    pkg.scripts.test = 'echo "Error: no test specified"'
-    pkg['lint-staged'] = {
-      '*.js': ['prettier --write', 'npm run lint', 'git add'],
-      '*.ts?(x)': [
-        'prettier --parser=typescript --write',
-        'npm run lint',
-        'git add',
-      ],
-    }
-  }
-  fs.writeFileSync(
-    path.join(root, 'package.json'),
-    JSON.stringify(pkg, null, 2)
-  )
 }
 
-async function installLintDeps(cmd) {
+async function installCodeLintDeps(cmd) {
   try {
-    await install(cmd[0], [
-      cmd[1],
+    await runCommand(commandMap[cmd].add, [
       'eslint',
       'prettier',
       'eslint-plugin-prettier',
@@ -107,25 +122,30 @@ async function installLintDeps(cmd) {
     ])
 
     // copy templated files
-    const templateDir = path.join(__dirname, 'template-lint')
+    const templateDir = path.join(__dirname, 'template-code-lint')
     const files = fs.readdirSync(templateDir)
     for (const file of files.filter((f) => f !== 'package.json')) {
       copy(path.join(templateDir, file), path.join(root, file))
     }
-  } catch (error) {
-    console.error(error)
-    return
-  }
 
-  // reset eslintrc config file
-  try {
+    // reset eslintrc config file
     // Pass through the corresponding stdio stream to/from the parent process.
-    await execa('npx', ['eslint', '--init'], { stdio: 'inherit' })
+    await runCommand(commandMap[cmd].exec, ['eslint', '--init'], {
+      stdio: 'inherit',
+    })
     let eslintrcPath = path.join(root, '.eslintrc.js')
     let extname = 'js'
     if (!fs.existsSync(eslintrcPath)) {
       eslintrcPath = path.join(root, '.eslintrc.json')
       extname = 'json'
+    }
+    if (!fs.existsSync(eslintrcPath)) {
+      console.log(
+        lightRed(
+          '\nYou must use JavaScript or JSON format to store configuration files\n'
+        )
+      )
+      return
     }
     const eslintrc = require(eslintrcPath)
     eslintrc.extends.push('plugin:prettier/recommended')
@@ -151,56 +171,73 @@ async function installLintDeps(cmd) {
       eslintrcStr = `module.exports = ${eslintrcStr}`
     }
     fs.writeFileSync(eslintrcPath, eslintrcStr)
-    await execa('npx', ['prettier', '--write', '.'])
+    // format eslintrc file
+    await runCommand(commandMap[cmd].exec, ['prettier', '--write', '.'])
+    await runCommand(commandMap[cmd].installAll)
   } catch (error) {
-    console.log(
-      lightRed(
-        'Please select the eslint configuration file in JavaScript or JSON format'
-      )
-    )
-    return
+    throw new Error(error)
   }
 }
 
-async function installGitHooksDeps(cmd) {
+async function installGitLintDeps(cmd) {
   try {
-    await install(cmd[0] === 'pnpm' ? 'pnpx' : 'npx', ['husky-init', '-D'])
-    await install(cmd[0], ['install'])
+    await runCommand(commandMap[cmd].templateDownload, ['husky-init -D'])
+    await runCommand(commandMap[cmd].installAll)
 
-    await install(cmd[0], [
-      cmd[1],
+    await runCommand(commandMap[cmd].add, [
       '@commitlint/config-conventional',
       '@commitlint/cli',
+      'commitizen',
       '-D',
     ])
 
     fs.writeFileSync(
       path.join(root, 'commitlint.config.js'),
-      // eslint-disable-next-line quotes
       "module.exports = { extends: ['@commitlint/config-conventional'] }"
     )
+    // copy templated files
+    const templateDir = path.join(__dirname, 'template-git-lint')
+    const files = fs.readdirSync(templateDir)
+    for (const file of files.filter((f) => f !== 'package.json')) {
+      copy(path.join(templateDir, file), path.join(root, file))
+    }
 
-    await execa('rm', ['-rf', './.husky/pre-commit'])
-    await execa('rm', ['-rf', './.husky/commit-msg'])
-    await execa('rm', ['-rf', './.husky/pre-push'])
+    await runCommand('rm', ['-rf', './.husky/pre-commit'])
+    await runCommand('rm', ['-rf', './.husky/commit-msg'])
+    await runCommand('rm', ['-rf', './.husky/pre-push'])
 
-    await execa('npx', ['husky', 'add', '.husky/pre-commit', 'npx lint-staged'])
-    await execa('npx', [
+    await runCommand(commandMap[cmd].exec, [
+      'commitizen init cz-conventional-changelog --save-dev --save-exact',
+    ])
+    await execa(commandMap[cmd].exec, [
+      'husky',
+      'add',
+      '.husky/pre-commit',
+      `npx lint-staged`,
+    ])
+    await execa(commandMap[cmd].exec, [
       'husky',
       'add',
       '.husky/commit-msg',
-      'npx --no-install commitlint --edit',
+      `npx --no-install commitlint --edit`,
     ])
-    await execa('npx', ['husky', 'add', '.husky/pre-push', 'npm run test'])
+    await execa(commandMap[cmd].exec, [
+      'husky',
+      'add',
+      '.husky/pre-push',
+      `${cmd} run test`,
+    ])
+    await execa('chmod', ['-R', '-X', './.husky'])
   } catch (error) {
     console.error(error)
     return
   }
 }
 
-async function install(cmd, args) {
-  const result = await execa(cmd, args)
-  console.log(lightGreen(`${result.stdout}\n`))
+async function runCommand(cmd, args = [], options = {}) {
+  console.log(green(`\nrunning command: \`${cmd} ${args.join(' ')}\``))
+  const childProcess = await execa.command(`${cmd} ${args.join(' ')}`, options)
+  console.log(lightGreen(`${childProcess.stdout}\n`))
 }
 
 function copy(src, dest) {
@@ -221,45 +258,62 @@ function copyDir(srcDir, destDir) {
   }
 }
 
-async function getCmd() {
-  let cmds = [
-    ['yarn', 'add'],
-    ['pnpm', 'add'],
-    ['npm', 'i'],
-  ]
-  for (let cmd of cmds) {
-    const r = await checkPkgCmd(cmd[0])
-    if (r) return cmd
+async function choiceCommand() {
+  try {
+    let choices = [
+      {
+        title: 'pnpm',
+        description: 'recommended to use pnpm to manage your package',
+        value: 'pnpm',
+      },
+      {
+        title: 'yarn',
+        value: 'yarn',
+      },
+      {
+        title: 'npm',
+        value: 'npm',
+      },
+    ]
+    choices = choices.filter((choice) => {
+      try {
+        const result = execa.sync('which', [choice.value])
+        return !result.failed
+      } catch (error) {
+        return !error.failed
+      }
+    })
+    const result = await prompts(
+      {
+        type: 'select',
+        name: 'value',
+        message: 'Pick a package manager tool',
+        choices,
+        initial: 0,
+      },
+      {
+        onCancel: () => {
+          throw new Error(`${lightRed('✖')} Operation cancelled`)
+        },
+      }
+    )
+    return result.value
+  } catch (error) {
+    throw new Error(error.message)
   }
-  return ['npm', 'i']
 }
 
-/**
- * @param {string | undefined} command package commander tool e.g. yarn
- * @returns string
- */
-async function checkPkgCmd(command) {
+function checkGitRepository() {
   try {
-    const { stdout } = await execa(command, ['-v'])
-    return !!stdout
+    return fs.existsSync(path.join(root, '.git'))
   } catch (error) {
     return false
   }
 }
 
-async function checkGitRepository() {
+function checkNpmRepository() {
   try {
-    await execa('ls', ['.git'])
-    return true
-  } catch (error) {
-    return false
-  }
-}
-
-async function checkNpmRepository() {
-  try {
-    await execa('ls', ['package.json'])
-    return true
+    return fs.existsSync(path.join(root, 'package.json'))
   } catch (error) {
     return false
   }
