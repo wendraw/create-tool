@@ -90,10 +90,10 @@ async function init() {
       pkg.scripts.commit = 'git-cz'
       pkg.scripts.test = 'echo "Error: no test specified"'
       pkg['lint-staged'] = {
-        '*.js': ['eslint --fix', 'prettier --write', 'git add'],
+        '*.js': ['prettier --write', 'eslint --fix', 'git add'],
         '*.ts?(x)': [
-          'eslint --fix',
           'prettier --parser=typescript --write',
+          'eslint --fix',
           'git add',
         ],
       }
